@@ -1,0 +1,20 @@
+# PDMS Reward Function Dependencies
+# PDMS奖励函数依赖项
+
+# Core dependencies / 核心依赖
+numpy>=1.19.0
+shapely>=1.8.0
+
+# nuPlan devkit (required for vehicle dynamics and trajectory utilities)
+# nuPlan开发工具包（车辆动力学和轨迹工具必需）
+# Note: Install from nuPlan repository
+# 注意：从nuPlan仓库安装
+# git+https://github.com/motional/nuplan-devkit.git
+
+# Optional for visualization / 可选的可视化工具
+matplotlib>=3.3.0
+
+# Development dependencies / 开发依赖
+# pytest>=6.0.0
+# black>=21.0
+# flake8>=3.9.0
