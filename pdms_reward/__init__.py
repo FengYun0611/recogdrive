@@ -18,7 +18,7 @@ as a standalone reward function in other projects.
 - dataclasses: 数据类定义 / Dataclass definitions
 
 使用示例 / Usage Example:
-    from pdms_reward import pdm_score, PDMResults
+    from pdms_reward import pdm_score_direct, PDMResults
     from pdms_reward.simulation import PDMSimulator
     from pdms_reward.scoring import PDMScorer
     
@@ -26,20 +26,24 @@ as a standalone reward function in other projects.
     simulator = PDMSimulator(proposal_sampling)
     scorer = PDMScorer(proposal_sampling)
     
-    # Calculate PDMS score
-    results = pdm_score(
-        metric_cache,
-        model_trajectory,
-        future_sampling,
-        simulator,
-        scorer
+    # Calculate PDMS score directly with trajectory and map data
+    results = pdm_score_direct(
+        model_trajectory=trajectory,
+        initial_ego_state=ego_state,
+        observation=observation,
+        centerline=centerline,
+        route_lane_ids=lane_ids,
+        drivable_area_map=drivable_map,
+        future_sampling=future_sampling,
+        simulator=simulator,
+        scorer=scorer
     )
     
     print(f"PDMS Score: {results.score}")
     print(f"Collision Safety: {results.no_at_fault_collisions}")
 """
 
-from .pdm_score import pdm_score, transform_trajectory, get_trajectory_as_array
+from .pdm_score import pdm_score, pdm_score_direct, transform_trajectory, get_trajectory_as_array
 from .dataclasses import PDMResults, Trajectory
 
 # Import scoring components
@@ -79,8 +83,9 @@ from .pdm_closed_planner import PDMClosedPlanner
 __version__ = "1.0.0"
 
 __all__ = [
-    # Main scoring function
+    # Main scoring functions
     'pdm_score',
+    'pdm_score_direct',
     'transform_trajectory',
     'get_trajectory_as_array',
     

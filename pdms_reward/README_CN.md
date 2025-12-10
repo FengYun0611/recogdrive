@@ -167,11 +167,13 @@ pip install .
 
 ## 快速开始
 
-### 最简单的使用示例
+### 推荐方式：使用直接API（无需MetricCache）
+
+**适用场景**：你有轨迹和地图信息，不想使用navsim的MetricCache
 
 ```python
 from pdms_reward import (
-    pdm_score,
+    pdm_score_direct,  # 使用直接API
     PDMSimulator,
     PDMScorer,
     Trajectory,
@@ -199,21 +201,177 @@ trajectory = Trajectory(
     trajectory_sampling=future_sampling
 )
 
-# 3. 计算评分
-results = pdm_score(
-    metric_cache,      # 从数据集获取
-    trajectory,
-    future_sampling,
-    simulator,
-    scorer
+# 3. 准备场景数据（从你的数据源获取）
+# - initial_ego_state: 当前自车状态
+# - observation: 其他车辆和障碍物
+# - centerline: 规划路径中心线
+# - route_lane_ids: 路线车道ID列表
+# - drivable_area_map: 可行驶区域地图
+
+# 4. 计算评分 - 直接传入各个组件
+results = pdm_score_direct(
+    model_trajectory=trajectory,
+    initial_ego_state=ego_state,
+    observation=observation,
+    centerline=centerline,
+    route_lane_ids=lane_ids,
+    drivable_area_map=drivable_map,
+    future_sampling=future_sampling,
+    simulator=simulator,
+    scorer=scorer
 )
 
-# 4. 查看结果
+# 5. 查看结果
 print(f"总分: {results.score:.4f}")
 print(f"无碰撞: {results.no_at_fault_collisions}")
 print(f"道路合规: {results.drivable_area_compliance}")
 print(f"进度: {results.ego_progress:.2f}米")
 ```
+
+### 方式2：使用MetricCache（需要navsim）
+
+**适用场景**：你已经在使用navsim的数据格式
+
+```python
+from pdms_reward import pdm_score  # 使用MetricCache接口
+
+# 如果你有MetricCache对象
+results = pdm_score(
+    metric_cache,      # 从navsim数据集获取
+    trajectory,
+    future_sampling,
+    simulator,
+    scorer
+)
+```
+
+## 输入数据准备指南
+
+使用`pdm_score_direct()`时，你需要准备以下输入数据：
+
+### 1. model_trajectory (Trajectory)
+你的模型预测的轨迹，相对坐标系（ego frame）
+
+```python
+import numpy as np
+from pdms_reward import Trajectory
+from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+
+# 创建轨迹poses: [[x, y, heading], ...]
+poses = np.array([
+    [0.0, 0.0, 0.0],      # 起点
+    [2.0, 0.1, 0.05],     # 0.5秒后
+    [4.0, 0.2, 0.08],     # 1.0秒后
+    # ... 更多点
+], dtype=np.float32)
+
+trajectory = Trajectory(
+    poses=poses,
+    trajectory_sampling=TrajectorySampling(time_horizon=4.0, interval_length=0.5)
+)
+```
+
+### 2. initial_ego_state (EgoState)
+当前时刻的自车状态
+
+```python
+from nuplan.common.actor_state.ego_state import EgoState
+from nuplan.common.actor_state.state_representation import StateSE2, StateVector2D, TimePoint
+from nuplan.common.actor_state.vehicle_parameters import get_pacifica_parameters
+
+# 从你的数据创建
+ego_state = EgoState.build_from_rear_axle(
+    rear_axle_pose=StateSE2(x, y, heading),
+    rear_axle_velocity_2d=StateVector2D(vx, vy),
+    rear_axle_acceleration_2d=StateVector2D(ax, ay),
+    tire_steering_angle=steering_angle,
+    time_point=TimePoint(timestamp_microseconds),
+    vehicle_parameters=get_pacifica_parameters()
+)
+```
+
+### 3. observation (PDMObservation)
+环境观察数据（其他车辆、障碍物等）
+
+```python
+from pdms_reward.observation import PDMObservation
+
+# 创建观察对象
+observation = PDMObservation(
+    trajectory_sampling=trajectory_sampling,
+    proposal_sampling=proposal_sampling,
+    map_radius=150.0  # 考虑150米范围内的物体
+)
+
+# 更新观察数据（从你的场景数据）
+observation.update(
+    ego_state,
+    detected_objects,     # 从传感器或数据集获取
+    traffic_light_data,   # 交通灯状态
+    route_lane_dict       # 路由信息
+)
+```
+
+### 4. centerline (PDMPath)
+规划路径的中心线，用于计算进度
+
+```python
+from pdms_reward.utils import PDMPath
+
+# 从路由规划获取中心线点
+centerline_points = [...]  # List[StateSE2]
+centerline = PDMPath(centerline_points)
+```
+
+### 5. route_lane_ids (List[str])
+规划路线上的车道ID列表
+
+```python
+# 从路由规划获取
+route_lane_ids = ['lane_connector_123', 'lane_456', ...]
+```
+
+### 6. drivable_area_map (PDMDrivableMap)
+可行驶区域地图
+
+```python
+from pdms_reward.observation import PDMDrivableMap
+
+# 从地图API创建
+drivable_map = PDMDrivableMap(
+    map_api,      # nuPlan的地图API
+    ego_state,    # 当前自车状态
+    map_radius=150.0  # 地图范围
+)
+```
+
+### 完整示例
+
+```python
+from pdms_reward import pdm_score_direct, PDMSimulator, PDMScorer
+
+# 初始化（只需一次）
+simulator = PDMSimulator(proposal_sampling)
+scorer = PDMScorer(proposal_sampling)
+
+# 计算评分
+results = pdm_score_direct(
+    model_trajectory=trajectory,
+    initial_ego_state=ego_state,
+    observation=observation,
+    centerline=centerline,
+    route_lane_ids=route_lane_ids,
+    drivable_area_map=drivable_area_map,
+    future_sampling=future_sampling,
+    simulator=simulator,
+    scorer=scorer
+)
+
+# 使用结果作为奖励
+reward = results.score
+```
+
+更多详细示例请参考：`examples/direct_api_usage.py`
 
 ## 详细使用说明
 
