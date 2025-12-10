@@ -18,15 +18,38 @@ as a standalone reward function in other projects.
 - dataclasses: 数据类定义 / Dataclass definitions
 
 使用示例 / Usage Example:
-    from pdms_reward import pdm_score_direct, PDMResults
-    from pdms_reward.simulation import PDMSimulator
-    from pdms_reward.scoring import PDMScorer
+
+    方式1: 使用MetricCacheBuilder (推荐，最简单)
+    Method 1: Using MetricCacheBuilder (Recommended, Simplest)
     
-    # Initialize simulator and scorer
+    from pdms_reward import pdm_score, build_metric_cache_from_scenario
+    from pdms_reward import PDMSimulator, PDMScorer
+    
+    # Initialize simulator and scorer (only once)
     simulator = PDMSimulator(proposal_sampling)
     scorer = PDMScorer(proposal_sampling)
     
-    # Calculate PDMS score directly with trajectory and map data
+    # Build MetricCache from scenario (handles all complexity)
+    metric_cache = build_metric_cache_from_scenario(scenario)
+    
+    # Calculate PDMS score
+    results = pdm_score(
+        metric_cache,
+        model_trajectory,
+        future_sampling,
+        simulator,
+        scorer
+    )
+    
+    print(f"PDMS Score: {results.score}")
+    
+    ---
+    
+    方式2: 直接使用各组件 (更灵活)
+    Method 2: Using components directly (More flexible)
+    
+    from pdms_reward import pdm_score_direct
+    
     results = pdm_score_direct(
         model_trajectory=trajectory,
         initial_ego_state=ego_state,
@@ -38,13 +61,19 @@ as a standalone reward function in other projects.
         simulator=simulator,
         scorer=scorer
     )
-    
-    print(f"PDMS Score: {results.score}")
-    print(f"Collision Safety: {results.no_at_fault_collisions}")
 """
 
 from .pdm_score import pdm_score, pdm_score_direct, transform_trajectory, get_trajectory_as_array
 from .dataclasses import PDMResults, Trajectory
+
+# Import MetricCache builder (optional, requires navsim)
+try:
+    from .metric_cache_builder import MetricCacheBuilder, build_metric_cache_from_scenario
+    METRIC_CACHE_BUILDER_AVAILABLE = True
+except ImportError:
+    METRIC_CACHE_BUILDER_AVAILABLE = False
+    MetricCacheBuilder = None
+    build_metric_cache_from_scenario = None
 
 # Import scoring components
 from .scoring import PDMScorer, PDMScorerConfig, ego_is_comfortable, get_collision_type
@@ -88,6 +117,11 @@ __all__ = [
     'pdm_score_direct',
     'transform_trajectory',
     'get_trajectory_as_array',
+    
+    # MetricCache builder (optional)
+    'MetricCacheBuilder',
+    'build_metric_cache_from_scenario',
+    'METRIC_CACHE_BUILDER_AVAILABLE',
     
     # Dataclasses
     'PDMResults',

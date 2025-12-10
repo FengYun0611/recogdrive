@@ -167,9 +167,77 @@ pip install .
 
 ## 快速开始
 
-### 推荐方式：使用直接API（无需MetricCache）
+### ⭐ 推荐方式：使用MetricCacheBuilder（最简单！）
 
-**适用场景**：你有轨迹和地图信息，不想使用navsim的MetricCache
+**适用场景**：你有nuPlan的scenario数据，想要最简单的使用方式
+
+这是**最简单**的方式！MetricCacheBuilder会自动处理所有复杂的数据准备工作。
+
+```python
+from pdms_reward import (
+    pdm_score,
+    build_metric_cache_from_scenario,  # 一行代码构建MetricCache
+    PDMSimulator,
+    PDMScorer,
+    Trajectory,
+)
+from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
+import numpy as np
+
+# 1. 初始化（只需一次）
+future_sampling = TrajectorySampling(time_horizon=4.0, interval_length=0.5)
+proposal_sampling = TrajectorySampling(time_horizon=8.0, interval_length=0.5)
+
+simulator = PDMSimulator(proposal_sampling)
+scorer = PDMScorer(proposal_sampling)
+
+# 2. 准备你的预测轨迹
+predicted_poses = np.array([
+    [0.0, 0.0, 0.0],    # [x, y, heading]
+    [2.0, 0.0, 0.0],
+    [4.0, 0.0, 0.0],
+    # ... 更多点
+])
+
+trajectory = Trajectory(
+    poses=predicted_poses,
+    trajectory_sampling=future_sampling
+)
+
+# 3. 从scenario自动构建MetricCache（关键步骤！）
+# 这一步会自动处理所有复杂的数据准备：
+# - PDM-Closed规划器初始化
+# - 参考轨迹生成
+# - 观察数据插值
+# - 中心线提取
+# - 可行驶区域地图构建
+metric_cache = build_metric_cache_from_scenario(scenario)
+
+# 4. 计算评分（简单！）
+results = pdm_score(
+    metric_cache,
+    trajectory,
+    future_sampling,
+    simulator,
+    scorer
+)
+
+# 5. 使用结果
+print(f"总分: {results.score:.4f}")
+reward = results.score  # 作为奖励函数使用
+```
+
+**优势**：
+- ✅ 只需要scenario和你的预测轨迹
+- ✅ 自动处理所有复杂的数据准备
+- ✅ 一行代码构建MetricCache
+- ✅ 无需手动创建observation、centerline等
+
+---
+
+### 方式2：使用直接API（高级用户）
+
+**适用场景**：你已经有准备好的各个组件，想要更灵活的控制
 
 ```python
 from pdms_reward import (
@@ -228,16 +296,16 @@ print(f"道路合规: {results.drivable_area_compliance}")
 print(f"进度: {results.ego_progress:.2f}米")
 ```
 
-### 方式2：使用MetricCache（需要navsim）
+### 方式3：已有MetricCache对象
 
-**适用场景**：你已经在使用navsim的数据格式
+**适用场景**：你已经有现成的MetricCache对象（从缓存文件加载等）
 
 ```python
-from pdms_reward import pdm_score  # 使用MetricCache接口
+from pdms_reward import pdm_score
 
-# 如果你有MetricCache对象
+# 直接使用已有的MetricCache
 results = pdm_score(
-    metric_cache,      # 从navsim数据集获取
+    metric_cache,      # 已有的MetricCache对象
     trajectory,
     future_sampling,
     simulator,
